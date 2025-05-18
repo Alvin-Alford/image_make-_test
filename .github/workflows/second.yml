@@ -1,347 +1,53 @@
-name: Build Custom Pico 2W UF2
+name: Build Custom MicroPython UF2 for Raspberry Pi Pico W
 
 on:
   push:
     branches: [ main ]
   pull_request:
     branches: [ main ]
-  workflow_dispatch:  # Enable manual triggering
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    
+    container:
+      image: python:3.9
+
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v3
-      
+      uses: actions/checkout@v4
+
     - name: Install dependencies
       run: |
+        python -m pip install -r requirements.txt
         sudo apt-get update
-        sudo apt-get install -y cmake gcc-arm-none-eabi libnewlib-arm-none-eabi build-essential python3 python3-pip
-        pip3 install pyserial
-    
-    - name: Clone Pico SDK
+        sudo apt-get install -y --no-install-recommends \
+          gcc-arm-none-eabi \
+          libnewlib-dev \
+          cmake \
+          ninja-build \
+          python3-dev \
+          libffi-dev \
+          zlib1g-dev \
+          mtools
+
+    - name: Set up Pico SDK
       run: |
-        git clone https://github.com/raspberrypi/pico-sdk.git
+        export PICO_SDK_FETCH_FROM_GIT=1
+        export PICO_SDK_PATH=${GITHUB_WORKSPACE}/pico-sdk
+        git clone --depth 1 -b master https://github.com/raspberrypi/pico-sdk.git
         cd pico-sdk
         git submodule update --init
-    
-    - name: Clone MicroPython
+
+    - name: Set up MicroPython repository
       run: |
-        git clone https://github.com/micropython/micropython.git
-        cd micropython
-        git submodule update --init
-    
-    - name: Clone TinyUSB for HID
+        export MICROPY_PATH=${GITHUB_WORKSPACE}/micropython
+        git clone --depth 1 -b v1.23.0 https://github.com/micropython/micropython.git
+        cd ${MICROPY_PATH}
+        git submodule update --init port/rp2
+
+    - name: Create build directory
       run: |
-        git clone https://github.com/hathach/tinyusb.git
-    
-    - name: Clone BTstack for Bluetooth
-      run: |
-        git clone https://github.com/bluekitchen/btstack.git
-    
-    - name: Clone Pico-Wireless
-      run: |
-        git clone https://github.com/raspberrypi/pico-wireless.git
-    
-    - name: Setup build environment
-      run: |
-        echo "PICO_SDK_PATH=$GITHUB_WORKSPACE/pico-sdk" >> $GITHUB_ENV
-        mkdir build
-    
-    - name: Patch MicroPython with custom modules
-      run: |
-        # Create directory for custom modules
-        mkdir -p custom_modules
-        
-        # Create custom module for HID support
-        cat > custom_modules/hid_module.c << 'EOF'
-        #include "py/runtime.h"
-        #include "py/mphal.h"
-        #include "hardware/usb.h"
-        
-        // HID keyboard implementation
-        STATIC mp_obj_t hid_keyboard_write(mp_obj_t key_code) {
-            // Implementation for keyboard HID
-            return mp_const_none;
-        }
-        STATIC MP_DEFINE_CONST_FUN_OBJ_1(hid_keyboard_write_obj, hid_keyboard_write);
-        
-        // HID mouse implementation
-        STATIC mp_obj_t hid_mouse_move(mp_obj_t x_obj, mp_obj_t y_obj) {
-            // Implementation for mouse HID
-            return mp_const_none;
-        }
-        STATIC MP_DEFINE_CONST_FUN_OBJ_2(hid_mouse_move_obj, hid_mouse_move);
-        
-        // Module definition
-        STATIC const mp_rom_map_elem_t hid_module_globals_table[] = {
-            { MP_ROM_QSTR(MP_QSTR___name__), MP_ROM_QSTR(MP_QSTR_hid) },
-            { MP_ROM_QSTR(MP_QSTR_keyboard_write), MP_ROM_PTR(&hid_keyboard_write_obj) },
-            { MP_ROM_QSTR(MP_QSTR_mouse_move), MP_ROM_PTR(&hid_mouse_move_obj) },
-        };
-        STATIC MP_DEFINE_CONST_DICT(hid_module_globals, hid_module_globals_table);
-        
-        const mp_obj_module_t hid_module = {
-            .base = { &mp_type_module },
-            .globals = (mp_obj_dict_t *)&hid_module_globals,
-        };
-        
-        MP_REGISTER_MODULE(MP_QSTR_hid, hid_module);
-        EOF
-        
-        # Create custom module for Bluetooth support
-        cat > custom_modules/bluetooth_module.c << 'EOF'
-        #include "py/runtime.h"
-        #include "py/mphal.h"
-        
-        // Bluetooth implementation
-        STATIC mp_obj_t bluetooth_init() {
-            // Implementation for Bluetooth initialization
-            return mp_const_none;
-        }
-        STATIC MP_DEFINE_CONST_FUN_OBJ_0(bluetooth_init_obj, bluetooth_init);
-        
-        STATIC mp_obj_t bluetooth_advertise(mp_obj_t name_obj) {
-            // Implementation for Bluetooth advertising
-            return mp_const_none;
-        }
-        STATIC MP_DEFINE_CONST_FUN_OBJ_1(bluetooth_advertise_obj, bluetooth_advertise);
-        
-        // Module definition
-        STATIC const mp_rom_map_elem_t bluetooth_module_globals_table[] = {
-            { MP_ROM_QSTR(MP_QSTR___name__), MP_ROM_QSTR(MP_QSTR_bluetooth) },
-            { MP_ROM_QSTR(MP_QSTR_init), MP_ROM_PTR(&bluetooth_init_obj) },
-            { MP_ROM_QSTR(MP_QSTR_advertise), MP_ROM_PTR(&bluetooth_advertise_obj) },
-        };
-        STATIC MP_DEFINE_CONST_DICT(bluetooth_module_globals, bluetooth_module_globals_table);
-        
-        const mp_obj_module_t bluetooth_module = {
-            .base = { &mp_type_module },
-            .globals = (mp_obj_dict_t *)&bluetooth_module_globals,
-        };
-        
-        MP_REGISTER_MODULE(MP_QSTR_bluetooth, bluetooth_module);
-        EOF
-        
-        # Patch MicroPython modules list to include our custom modules
-        cd micropython/ports/rp2
-        sed -i '/MICROPY_PY_NETWORK_CYW43/a MICROPY_PY_CUSTOM_HID=1\nMICROPY_PY_CUSTOM_BT=1' mpconfigport.h
-        
-        # Copy our custom modules to the modules directory
-        cp -r ../../../custom_modules/* modules/
-        
-        # Update CMakeLists.txt to include our modules
-        sed -i '/add_library(usermod INTERFACE)/a target_sources(usermod INTERFACE ${CMAKE_CURRENT_LIST_DIR}/modules/hid_module.c ${CMAKE_CURRENT_LIST_DIR}/modules/bluetooth_module.c)' CMakeLists.txt
-    
-    - name: Build MicroPython firmware
-      run: |
-        cd micropython
-        make -C mpy-cross
-        cd ports/rp2
-        make submodules
-        make BOARD=PICO_W2 FROZEN_MANIFEST= FROZEN_DIR= USER_C_MODULES= MICROPY_PY_NETWORK_CYW43=1 MICROPY_PY_BLUETOOTH=1 USB_DEVICE_HID=1 -j4
-    
-    - name: Create UF2 file
-      run: |
-        cd micropython/ports/rp2/build-PICO_W2
-        python3 $GITHUB_WORKSPACE/pico-sdk/tools/elf2uf2/elf2uf2.py firmware.elf custom_micropython_pico2w.uf2
-    
-    - name: Upload UF2 file
-      uses: actions/upload-artifact@v4
-      with:
-        name: custom-pico2w-uf2
-        path: micropython/ports/rp2/build-PICO_W2/custom_micropython_pico2w.uf2
-        
-    - name: Create example code
-      run: |
-        mkdir -p examples
-        cat > examples/hid_example.py << 'EOF'
-        # Example code for using USB HID (keyboard and mouse)
-        import time
-        import hid
-        
-        # Simulate keyboard typing
-        def type_hello():
-            # Send 'hello' keystrokes
-            for char in "hello":
-                hid.keyboard_write(ord(char))
-                time.sleep(0.1)
-        
-        # Simulate mouse movement
-        def move_mouse():
-            # Move mouse in a square pattern
-            for _ in range(10):
-                hid.mouse_move(10, 0)  # Move right
-                time.sleep(0.1)
-            for _ in range(10):
-                hid.mouse_move(0, 10)  # Move down
-                time.sleep(0.1)
-            for _ in range(10):
-                hid.mouse_move(-10, 0)  # Move left
-                time.sleep(0.1)
-            for _ in range(10):
-                hid.mouse_move(0, -10)  # Move up
-                time.sleep(0.1)
-        
-        # Run demo
-        if __name__ == "__main__":
-            print("Starting HID demo in 5 seconds...")
-            time.sleep(5)
-            print("Typing 'hello'")
-            type_hello()
-            time.sleep(1)
-            print("Moving mouse in a square pattern")
-            move_mouse()
-        EOF
-        
-        cat > examples/bluetooth_example.py << 'EOF'
-        # Example code for using Bluetooth
-        import time
-        import bluetooth
-        
-        # Initialize bluetooth module
-        bluetooth.init()
-        
-        # Set device name and start advertising
-        bluetooth.advertise("Pico2W-BT")
-        
-        # Keep the script running to maintain advertising
-        print("Bluetooth advertising as 'Pico2W-BT'")
-        print("Press Ctrl+C to stop")
-        
-        try:
-            while True:
-                time.sleep(1)
-        except KeyboardInterrupt:
-            print("Bluetooth advertising stopped")
-        EOF
-        
-        cat > examples/wifi_example.py << 'EOF'
-        # Example code for using WiFi
-        import network
-        import time
-        
-        # Connect to WiFi
-        def connect_wifi(ssid, password):
-            wlan = network.WLAN(network.STA_IF)
-            wlan.active(True)
-            print(f"Connecting to {ssid}...")
-            
-            wlan.connect(ssid, password)
-            
-            # Wait for connection with timeout
-            max_wait = 10
-            while max_wait > 0:
-                if wlan.status() < 0 or wlan.status() >= 3:
-                    break
-                max_wait -= 1
-                print("Waiting for connection...")
-                time.sleep(1)
-            
-            # Handle connection result
-            if wlan.status() == 3:
-                print("Connected!")
-                print(f"IP Address: {wlan.ifconfig()[0]}")
-                return True
-            else:
-                print("Connection failed!")
-                return False
-        
-        # Example usage
-        if __name__ == "__main__":
-            # Replace with your WiFi credentials
-            connect_wifi("YOUR_SSID", "YOUR_PASSWORD")
-        EOF
-        
-    - name: Upload example code
-      uses: actions/upload-artifact@v4
-      with:
-        name: pico2w-examples
-        path: examples/
-        
-    - name: Create README
-      run: |
-        cat > README.md << 'EOF'
-        # Custom Raspberry Pi Pico 2W Firmware
-        
-        This repository contains a custom UF2 firmware for the Raspberry Pi Pico 2W with the following features:
-        
-        - MicroPython support
-        - WiFi connectivity
-        - USB HID (keyboard and mouse) support
-        - Bluetooth support
-        
-        ## Installation
-        
-        1. Download the `custom_micropython_pico2w.uf2` file from the latest workflow run
-        2. Connect your Pico 2W while holding the BOOTSEL button
-        3. Drag and drop the UF2 file onto the RPI-RP2 drive that appears
-        4. The Pico will restart with the new firmware
-        
-        ## Example Usage
-        
-        See the `examples` directory for sample code showing how to use the various features:
-        
-        - `wifi_example.py`: How to connect to WiFi
-        - `hid_example.py`: How to simulate keyboard and mouse actions
-        - `bluetooth_example.py`: How to use Bluetooth functionality
-        
-        ## Modules
-        
-        ### WiFi Module
-        
-        Uses the built-in `network` module:
-        
-        ```python
-        import network
-        
-        wlan = network.WLAN(network.STA_IF)
-        wlan.active(True)
-        wlan.connect("SSID", "PASSWORD")
-        ```
-        
-        ### HID Module
-        
-        Custom `hid` module for keyboard and mouse functionality:
-        
-        ```python
-        import hid
-        
-        # Send keypress
-        hid.keyboard_write(ord('a'))
-        
-        # Move mouse (x, y)
-        hid.mouse_move(10, 5)
-        ```
-        
-        ### Bluetooth Module
-        
-        Custom `bluetooth` module:
-        
-        ```python
-        import bluetooth
-        
-        bluetooth.init()
-        bluetooth.advertise("My Device")
-        ```
-        
-        ## Troubleshooting
-        
-        If you encounter issues:
-        
-        1. Make sure your Pico 2W is properly connected
-        2. Try reinstalling the firmware
-        3. Check your code for syntax errors
-        
-        ## License
-        
-        This project is licensed under the MIT License - see the LICENSE file for details.
-        EOF
-        
-    - name: Upload README
-      uses: actions/upload-artifact@v4
-      with:
-        name: documentation
-        path: README.md
+        mkdir -p build-pico_w
+        cd build-pico_w
+
+    - name: Configure
