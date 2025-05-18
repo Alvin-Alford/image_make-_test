@@ -11,8 +11,7 @@ jobs:
   build-uf2:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
+      # … your earlier steps …
 
       - name: Install dependencies
         run: |
@@ -44,7 +43,6 @@ jobs:
           EOF
         shell: bash
 
-
       - name: Build firmware.uf2
         working-directory: micropython/ports/rp2
         run: |
@@ -54,5 +52,5 @@ jobs:
       - name: Upload firmware.uf2
         uses: actions/upload-artifact@v3
         with:
-          name: firmware-uf2
+          name: firmware-uf2            # <─ two spaces in from 'with:'
           path: micropython/ports/rp2/build-pico_w/firmware.uf2
