@@ -1,78 +1,70 @@
-name: Build Custom MicroPython UF2 for Raspberry Pi Pico W
+name: Build Custom MicroPython UF2
 
 on:
+  workflow_dispatch:
   push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
+    branches: [ "main" ]
+
+env:
+  PICO_SDK_VERSION: 1.5.1
+  MICROPYTHON_VERSION: v1.22.2
 
 jobs:
-  build:
+  build-firmware:
     runs-on: ubuntu-latest
-    container:
-      image: python:3.9
-
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
 
-    - name: Install dependencies
+    - name: Set up environment
       run: |
-        python -m pip install -r requirements.txt
         sudo apt-get update
-        sudo apt-get install -y --no-install-recommends \
-          gcc-arm-none-eabi \
-          libnewlib-dev \
+        sudo apt-get install -y \
           cmake \
-          ninja-build \
-          python3-dev \
-          libffi-dev \
-          zlib1g-dev \
-          mtools
+          gcc-arm-none-eabi \
+          libnewlib-arm-none-eabi \
+          build-essential \
+          libstdc++-arm-none-eabi-newlib \
+          git \
+          python3 \
+          python3-pip
 
-    - name: Set up Pico SDK
+    - name: Install Pico SDK
       run: |
-        export PICO_SDK_FETCH_FROM_GIT=1
-        export PICO_SDK_PATH=${GITHUB_WORKSPACE}/pico-sdk
-        git clone --depth 1 -b master https://github.com/raspberrypi/pico-sdk.git
-        cd pico-sdk
-        git submodule update --init
+        git clone --branch ${{ env.PICO_SDK_VERSION }} https://github.com/raspberrypi/pico-sdk.git
+        export PICO_SDK_PATH=$PWD/pico-sdk
 
-    - name: Set up MicroPython repository
+    - name: Clone MicroPython
       run: |
-        export MICROPY_PATH=${GITHUB_WORKSPACE}/micropython
-        git clone --depth 1 -b v1.23.0 https://github.com/micropython/micropython.git
-        cd ${MICROPY_PATH}
-        git submodule update --init port/rp2
+        git clone --branch ${{ env.MICROPYTHON_VERSION }} https://github.com/micropython/micropython.git
 
-    - name: Create build directory
+    - name: Configure HID and Wireless
       run: |
-        mkdir -p build-pico_w
-        cd build-pico_w
-
-    - name: Configure build (USB HID + Bluetooth/Wireless)
-      run: |
-        export PICO_BOARD=pico_w
-        export PICO_TOOLCHAIN_PATH=/usr/bin
-        cmake -G Ninja \
-          -DPICO_SDK_PATH=${PICO_SDK_PATH} \
-          -DCMAKE_BUILD_TYPE=Release \
-          -D MICROPY_PY_USB=1 \
-          -D MICROPY_PY_USB_HID=1 \
-          -D MICROPY_BLUETOOTH=1 \
-          ../../ports/rp2
+        cd micropython/ports/rp2
+        # Enable USB HID
+        echo 'USBD_HID_MOUSE = 1' >> boards/PICO_W/mpconfigboard.mk
+        echo 'USBD_HID_KEYBOARD = 1' >> boards/PICO_W/mpconfigboard.mk
+        
+        # Enable wireless features
+        echo 'MICROPY_PY_BLUETOOTH = 1' >> boards/PICO_W/mpconfigboard.mk
+        echo 'MICROPY_PY_NETWORK_CYW43 = 1' >> boards/PICO_W/mpconfigboard.mk
+        echo 'MICROPY_PY_WIZNET5K = 0' >> boards/PICO_W/mpconfigboard.mk
 
     - name: Build MicroPython
       run: |
-        ninja -v
+        cd micropython
+        make -C mpy-cross
+        cd ports/rp2
+        make BOARD=PICO_W clean
+        make BOARD=PICO_W
 
-    - name: Extract UF2 file
+    - name: Generate UF2
       run: |
-        cd ../ports/rp2/build-${PICO_BOARD}/firmware
-        cp micropython.uf2 micropython-${PICO_BOARD}-usbhid-bt.uf2
+        cd micropython/ports/rp2/build-PICO_W
+        cp firmware.uf2 ${{ github.workspace }}/micropython-pico2w-hid-ble.uf2
 
     - name: Upload UF2 artifact
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
-        name: micropython-uf2
-        path: micropython-${PICO_BOARD}-usbhid-bt.uf2
+        name: custom-micropython-uf2
+        path: micropython-pico2w-hid-ble.uf2
