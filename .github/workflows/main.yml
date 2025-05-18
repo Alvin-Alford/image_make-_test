@@ -1,4 +1,4 @@
-name: Build Pico 2W MicroPython UF2
+name: bob
 
 on:
   push:
@@ -10,9 +10,10 @@ jobs:
     runs-on: ubuntu-latest
     env:
       PICO_BOARD: pico-w
+
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Install build dependencies
         run: |
@@ -56,8 +57,7 @@ jobs:
           cp micropython/ports/rp2/build/${PICO_BOARD}/firmware.uf2 artifacts/pico2w-custom.uf2
 
       - name: Upload UF2 artifact
-        # pin to a specific minor release so the runner can fetch it
-        uses: actions/upload-artifact@v3.1.2
+        uses: actions/upload-artifact@v4
         with:
           name: pico2w-custom.uf2
           path: artifacts/pico2w-custom.uf2
