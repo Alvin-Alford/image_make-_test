@@ -1,4 +1,4 @@
-name: Build Pico 2W MicroPython UF2 e
+name: Build Pico 2W MicroPython UF2
 
 on:
   push:
@@ -56,7 +56,8 @@ jobs:
           cp micropython/ports/rp2/build/${PICO_BOARD}/firmware.uf2 artifacts/pico2w-custom.uf2
 
       - name: Upload UF2 artifact
-        uses: actions/upload-artifact@v3
+        # pin to a specific minor release so the runner can fetch it
+        uses: actions/upload-artifact@v3.1.2
         with:
           name: pico2w-custom.uf2
           path: artifacts/pico2w-custom.uf2
