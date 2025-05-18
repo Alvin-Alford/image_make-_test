@@ -1,4 +1,4 @@
-name: Build Pico 2W MicroPython UF2
+name: Build Pico 2W MicroPython UF2 e
 
 on:
   push:
