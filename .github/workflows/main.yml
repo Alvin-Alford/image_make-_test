@@ -45,17 +45,18 @@ jobs:
       - name: Build UF2 (release) with CMake
         working-directory: micropython/ports/rp2
         run: |
-          # 1) Fetch/update submodules (picotool, tinyusb, etc.)
+          # 1) Fetch/update all the SDK submodules (picotool, tinyusb, etc.)
           git submodule update --init --recursive
 
-          # 2) Configure & build in a separate directory
+          # 2) Out-of-source CMake configure & build (Release)
           mkdir -p build
           cd build
           cmake .. \
             -DCMAKE_BUILD_TYPE=Release \
             -DPICO_SDK_FETCH_FROM_GIT=ON \
             -DPICO_BOARD=pico_w
-          cmake --build . --target uf2
+          # NOTE: no --target here; just build everything
+          cmake --build .
 
       - name: Collect firmware.uf2
         run: |
