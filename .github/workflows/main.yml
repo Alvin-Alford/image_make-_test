@@ -28,22 +28,20 @@ jobs:
           cd micropython
           git submodule update --init
 
-      - name: Patch rp2 port for HID + Bluetooth
+      - name: Enable USB-HID & Bluetooth in mpconfigport.h
         working-directory: micropython/ports/rp2
         run: |
-          patch << 'EOF'
-          *** Begin Patch
-          *** Update File: mpconfigport.h
-          @@
-          -#define MICROPY_HW_USB_CDC             (1)
-          +#define MICROPY_HW_USB_CDC             (1)
-          +// Enable USB HID (keyboard + mouse)
-          +#define MICROPY_HW_USB_HID             (1)
-          +
-          +// Enable the Bluetooth API (requires CYW4343x/NimBLE support)
-          +#define MICROPY_PY_BLUETOOTH           (1)
-          *** End Patch
-          EOF
+          # Backup in case you need to roll back
+          cp mpconfigport.h mpconfigport.h.bak
+
+          # Insert HID + Bluetooth support immediately after the USB_CDC define
+          sed -i '/#define MICROPY_HW_USB_CDC[[:space:]]*(1)/a\
+          // Enable USB HID (keyboard + mouse)\
+          #define MICROPY_HW_USB_HID (1)\
+          \
+          // Enable the Bluetooth API (requires CYW4343x/NimBLE support)\
+          #define MICROPY_PY_BLUETOOTH (1)' mpconfigport.h
+
 
       - name: Build UF2 (release)
         working-directory: micropython/ports/rp2
