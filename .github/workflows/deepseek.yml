@@ -1,4 +1,4 @@
-name: Build Custom MicroPython UF2
+name: deep
 
 on:
   workflow_dispatch:
