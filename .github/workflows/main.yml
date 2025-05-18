@@ -49,8 +49,8 @@ jobs:
           make submodules
           make BOARD=pico_w
 
-      - name: Upload firmware.uf2
-        uses: actions/upload-artifact@v3
-        with:
-          name: firmware-uf2            # <─ two spaces in from 'with:'
-          path: micropython/ports/rp2/build-pico_w/firmware.uf2
+  - name: Upload firmware.uf2
+    uses: actions/upload-artifact@v3
+    with:
+      name: firmware-uf2
+      path: micropython/ports/rp2/build-pico_w/firmware.uf2
