@@ -1,0 +1,46 @@
+name: Build Custom MicroPython UF2
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ "main" ]
+
+env:
+  PICO_SDK_VERSION: 1.5.1
+  MICROPYTHON_VERSION: v1.22.2
+
+jobs:
+  build-uf2:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout MicroPython
+      uses: actions/checkout@v4
+      with:
+        repository: micropython/micropython
+        ref: ${{ env.MICROPYTHON_VERSION }}
+        submodules: recursive
+
+    - name: Setup dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y cmake gcc-arm-none-eabi libnewlib-arm-none-eabi build-essential
+
+    - name: Configure USB HID and Wireless
+      run: |
+        # Enable USB HID support
+        sed -i '/#define MICROPY_HW_USB_HID/ c\#define MICROPY_HW_USB_HID (1)' ports/rp2/boards/PICO_W/mpconfigboard.h
+        sed -i '/#define MICROPY_HW_USB_HID_INTERFACES/ c\#define MICROPY_HW_USB_HID_INTERFACES (2)' ports/rp2/boards/PICO_W/mpconfigboard.h
+        
+        # Enable wireless support
+        sed -i '/#define MICROPY_PY_NETWORK_CYW43/ c\#define MICROPY_PY_NETWORK_CYW43 (1)' ports/rp2/mpconfigport.h
+
+    - name: Build MicroPython
+      run: |
+        cd ports/rp2
+        make -j$(nproc) BOARD=PICO_W
+
+    - name: Upload UF2 artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: micropython-pico2w-uf2
+        path: ports/rp2/build-PICO_W/firmware.uf2
