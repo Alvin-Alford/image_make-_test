@@ -42,18 +42,26 @@ jobs:
           // Enable the Bluetooth API (requires CYW4343x/NimBLE support)\
           #define MICROPY_PY_BLUETOOTH (1)' mpconfigport.h
 
-
-      - name: Build UF2 (release)
+      - name: Build UF2 (release) with CMake
         working-directory: micropython/ports/rp2
         run: |
-          make submodules
-          make BOARD=${PICO_BOARD} BUILD=release
+          # 1) Fetch/update submodules (picotool, tinyusb, etc.)
+          git submodule update --init --recursive
+
+          # 2) Configure & build in a separate directory
+          mkdir -p build
+          cd build
+          cmake .. \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DPICO_SDK_FETCH_FROM_GIT=ON \
+            -DPICO_BOARD=pico_w
+          cmake --build . --target uf2
 
       - name: Collect firmware.uf2
         run: |
           mkdir -p artifacts
-          cp micropython/ports/rp2/build/${PICO_BOARD}/firmware.uf2 artifacts/pico2w-custom.uf2
-
+          cp micropython/ports/rp2/build/firmware.uf2 artifacts/pico2w-custom.uf2
+          
       - name: Upload UF2 artifact
         uses: actions/upload-artifact@v4
         with:
