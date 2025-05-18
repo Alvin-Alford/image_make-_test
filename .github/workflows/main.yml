@@ -1,58 +1,104 @@
-name: Build Pico W Custom UF2
+name: Build Pico 2W Custom Firmware
 
 on:
   push:
-    branches:
-      - main
-    tags:
-      - 'v*.*.*'
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+    # Allow manual triggering
 
 jobs:
-  build-uf2:
+  build:
     runs-on: ubuntu-latest
-
+    
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
-
-      - name: Install dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y git cmake gcc-arm-none-eabi build-essential libusb-1.0-0-dev
-
-      - name: Clone Pico SDK
-        run: |
-          git clone https://github.com/raspberrypi/pico-sdk.git pico-sdk
-          cd pico-sdk && git submodule update --init
-        shell: bash
-
-      - name: Set PICO_SDK_PATH
-        run: echo "PICO_SDK_PATH=$GITHUB_WORKSPACE/pico-sdk" >> $GITHUB_ENV
-
-      - name: Clone MicroPython RP2 port
-        run: |
-          git clone https://github.com/micropython/micropython.git micropython
-          cd micropython/ports/rp2
-          git submodule update --init lib/tinyusb
-        shell: bash
-
-      - name: Enable USB HID and Bluetooth
-        run: |
-          cat >> micropython/ports/rp2/mpconfigboard.h << 'EOF'
-          #define MICROPY_HW_USB_HID               (1)
-          #define MICROPY_PY_BLUETOOTH             (1)
-          #define MICROPY_PY_BLUETOOTH_NIMBLE      (1)
-          EOF
-        shell: bash
-
-      - name: Build firmware.uf2
-        working-directory: micropython/ports/rp2
-        run: |
-          make submodules
-          make BOARD=pico_w
-
-      - name: Upload firmware.uf2
-        uses: actions/upload-artifact@v3
-        with:
-          name: firmware-uf2
-          path: micropython/ports/rp2/build-pico_w/firmware.uf2
+    - name: Checkout code
+      uses: actions/checkout@v3
+      
+    - name: Install dependencies
+      run: |
+        sudo apt update
+        sudo apt install -y git cmake gcc-arm-none-eabi libnewlib-arm-none-eabi build-essential python3 python3-pip
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+    
+    - name: Clone Pico SDK
+      run: |
+        git clone https://github.com/raspberrypi/pico-sdk.git
+        cd pico-sdk
+        git submodule update --init
+        echo "PICO_SDK_PATH=$PWD" >> $GITHUB_ENV
+    
+    - name: Clone MicroPython
+      run: |
+        git clone https://github.com/micropython/micropython.git
+        cd micropython
+        git submodule update --init
+    
+    - name: Build MicroPython cross-compiler
+      run: |
+        cd micropython
+        make -C mpy-cross
+    
+    - name: Configure Pico W 2 board with Bluetooth and USB HID support
+      run: |
+        cd micropython/ports/rp2
+        
+        # Create modules configuration file
+        cat > modules_conf.h << 'EOF'
+        #define MICROPY_PY_BLUETOOTH (1)
+        #define MICROPY_HW_ENABLE_BLUETOOTH (1)
+        #define MICROPY_PY_BLUETOOTH_USE_SYNC_EVENTS (1)
+        #define MICROPY_PY_NETWORK_WLAN (1)
+        #define MICROPY_PY_USOCKET (1)
+        #define MICROPY_PY_SSL (1)
+        #define MICROPY_PY_USB_HID (1)
+        EOF
+        
+        # Create board configuration
+        mkdir -p boards/PICO_W2
+        cat > boards/PICO_W2/mpconfigboard.h << 'EOF'
+        #define MICROPY_HW_BOARD_NAME "Raspberry Pi Pico W 2"
+        #define MICROPY_HW_MCU_NAME "RP2040"
+        #define MICROPY_HW_ENABLE_UART1 (1)
+        #define MICROPY_HW_ENABLE_ADC (1)
+        #define MICROPY_HW_ENABLE_BLUETOOTH (1)
+        #define MICROPY_PY_BLUETOOTH (1)
+        #define MICROPY_HW_ENABLE_USBDEV (1)
+        #define MICROPY_HW_USB_CDC_NUM (1)
+        #define MICROPY_HW_USB_MSC (0)
+        #define MICROPY_HW_USB_HID (1)
+        #define MICROPY_HW_FLASH_STORAGE_BYTES (15 * 1024 * 1024)
+        EOF
+        
+        # Create minimal board definition file
+        cat > boards/PICO_W2/mpconfigboard.cmake << 'EOF'
+        # Use Pico W 2 board configuration
+        set(PICO_BOARD pico_w)
+        # Extra board configurations for W2
+        add_definitions(-DPICO_W2=1)
+        EOF
+    
+    - name: Build firmware
+      run: |
+        cd micropython/ports/rp2
+        make BOARD=PICO_W2 FROZEN_MANIFEST= USB_DEVICE=1 USER_C_MODULES= clean
+        make BOARD=PICO_W2 FROZEN_MANIFEST= USB_DEVICE=1 USER_C_MODULES= -j4
+    
+    - name: Convert to UF2
+      run: |
+        cd micropython/ports/rp2/build-PICO_W2
+        python3 ../../tools/uf2conv.py -f 0xe48bff56 -b 0x10000000 -c firmware.bin -o firmware.uf2
+    
+    - name: Upload firmware artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: pico-w2-firmware
+        path: |
+          micropython/ports/rp2/build-PICO_W2/firmware.uf2
+          micropython/ports/rp2/build-PICO_W2/firmware.bin
+        retention-days: 30
