@@ -86,8 +86,15 @@ jobs:
     - name: Build firmware
       run: |
         cd micropython/ports/rp2
-        make BOARD=PICO_W2 FROZEN_MANIFEST= USB_DEVICE=1 USER_C_MODULES= clean
-        make BOARD=PICO_W2 FROZEN_MANIFEST= USB_DEVICE=1 USER_C_MODULES= -j4
+        
+        # Update module configuration
+        echo "CONFIG_BLUETOOTH_NIMBLE=y" >> boards/PICO_W2/mpconfigboard.mk
+        echo "MICROPY_PY_BLUETOOTH=1" >> boards/PICO_W2/mpconfigboard.mk
+        echo "MICROPY_BLUETOOTH_NIMBLE=1" >> boards/PICO_W2/mpconfigboard.mk
+        
+        make BOARD=PICO_W2 FROZEN_MANIFEST= USB_DEVICE=1 USER_C_MODULES= MICROPY_PY_BLUETOOTH=1 MICROPY_BLUETOOTH_NIMBLE=1 submodules
+        make BOARD=PICO_W2 FROZEN_MANIFEST= USB_DEVICE=1 USER_C_MODULES= MICROPY_PY_BLUETOOTH=1 MICROPY_BLUETOOTH_NIMBLE=1 clean
+        make BOARD=PICO_W2 FROZEN_MANIFEST= USB_DEVICE=1 USER_C_MODULES= MICROPY_PY_BLUETOOTH=1 MICROPY_BLUETOOTH_NIMBLE=1 -j4
     
     - name: Convert to UF2
       run: |
