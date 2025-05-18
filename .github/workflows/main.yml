@@ -10,6 +10,7 @@ on:
 jobs:
   build-uf2:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
@@ -30,7 +31,7 @@ jobs:
 
       - name: Clone MicroPython RP2 port
         run: |
-          git clone --branch master https://github.com/micropython/micropython.git micropython
+          git clone https://github.com/micropython/micropython.git micropython
           cd micropython/ports/rp2
           git submodule update --init lib/tinyusb
         shell: bash
@@ -50,8 +51,8 @@ jobs:
           make submodules
           make BOARD=pico_w
 
-  - name: Upload firmware.uf2
-    uses: actions/upload-artifact@v3
-    with:
-      name: firmware-uf2
-      path: micropython/ports/rp2/build-pico_w/firmware.uf2
+      - name: Upload firmware.uf2
+        uses: actions/upload-artifact@v3
+        with:
+          name: firmware-uf2
+          path: micropython/ports/rp2/build-pico_w/firmware.uf2
