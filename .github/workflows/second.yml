@@ -149,7 +149,7 @@ jobs:
         python3 $GITHUB_WORKSPACE/pico-sdk/tools/elf2uf2/elf2uf2.py firmware.elf custom_micropython_pico2w.uf2
     
     - name: Upload UF2 file
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: custom-pico2w-uf2
         path: micropython/ports/rp2/build-PICO_W2/custom_micropython_pico2w.uf2
@@ -256,7 +256,7 @@ jobs:
         EOF
         
     - name: Upload example code
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: pico2w-examples
         path: examples/
@@ -341,7 +341,7 @@ jobs:
         EOF
         
     - name: Upload README
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: documentation
         path: README.md
