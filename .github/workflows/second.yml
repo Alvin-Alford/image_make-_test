@@ -37,26 +37,42 @@ jobs:
     - name: Clone MicroPython
       run: |
         git clone --branch ${{ env.MICROPYTHON_VERSION }} https://github.com/micropython/micropython.git
-
+  
+    # Modified workflow with path fixes
     - name: Configure HID and Wireless
       run: |
         cd micropython/ports/rp2
-        # Enable USB HID
-        echo 'USBD_HID_MOUSE = 1' >> boards/PICO_W/mpconfigboard.mk
-        echo 'USBD_HID_KEYBOARD = 1' >> boards/PICO_W/mpconfigboard.mk
         
-        # Enable wireless features
-        echo 'MICROPY_PY_BLUETOOTH = 1' >> boards/PICO_W/mpconfigboard.mk
-        echo 'MICROPY_PY_NETWORK_CYW43 = 1' >> boards/PICO_W/mpconfigboard.mk
-        echo 'MICROPY_PY_WIZNET5K = 0' >> boards/PICO_W/mpconfigboard.mk
+        # Create board directory if missing
+        mkdir -p boards/RASPBERRY_PI_PICO_W
+        
+        # Create/update configuration file
+        cat << EOF > boards/RASPBERRY_PI_PICO_W/mpconfigboard.mk
+        # Custom configuration for Pico 2W
+        MICROPY_PY_LWIP = 1
+        MICROPY_PY_NETWORK_CYW43 = 1
+        MICROPY_PY_BLUETOOTH = 1
+        USBD_HID_MOUSE = 1
+        USBD_HID_KEYBOARD = 1
+        CFLAGS_EXTRA += -DMICROPY_PY_BLUETOOTH_BTSTACK=1
+        EOF
+    
+        # Update general configuration
+        echo "CYW43_LWIP=1" >> mpconfigport.mk
 
+    - name: Verify Configuration
+      run: |
+        echo "Current directory: $(pwd)"
+        ls -la micropython/ports/rp2/boards/RASPBERRY_PI_PICO_W
+        cat micropython/ports/rp2/boards/RASPBERRY_PI_PICO_W/mpconfigboard.mk
+            
     - name: Build MicroPython
       run: |
         cd micropython
         make -C mpy-cross
         cd ports/rp2
-        make BOARD=PICO_W clean
-        make BOARD=PICO_W
+        make BOARD=RASPBERRY_PI_PICO_W clean
+        make BOARD=RASPBERRY_PI_PICO_W
 
     - name: Generate UF2
       run: |
