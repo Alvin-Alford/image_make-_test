@@ -1,0 +1,57 @@
+name: Build Pico W Custom UF2
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - 'v*.*.*'
+
+jobs:
+  build-uf2:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y git cmake gcc-arm-none-eabi build-essential libusb-1.0-0-dev
+
+      - name: Clone Pico SDK
+        run: |
+          git clone https://github.com/raspberrypi/pico-sdk.git pico-sdk
+          cd pico-sdk && git submodule update --init
+        shell: bash
+
+      - name: Set PICO_SDK_PATH
+        run: echo "PICO_SDK_PATH=$GITHUB_WORKSPACE/pico-sdk" >> $GITHUB_ENV
+
+      - name: Clone MicroPython RP2 port
+        run: |
+          git clone --branch master https://github.com/micropython/micropython.git micropython
+          cd micropython/ports/rp2
+          git submodule update --init lib/tinyusb
+        shell: bash
+
+      - name: Enable USB HID and Bluetooth
+        run: |
+          cat >> micropython/ports/rp2/mpconfigboard.h << 'EOF'
+#define MICROPY_HW_USB_HID               (1)
+#define MICROPY_PY_BLUETOOTH             (1)
+#define MICROPY_PY_BLUETOOTH_NIMBLE      (1)
+EOF
+        shell: bash
+
+      - name: Build firmware.uf2
+        working-directory: micropython/ports/rp2
+        run: |
+          make submodules
+          make BOARD=pico_w
+
+      - name: Upload firmware.uf2
+        uses: actions/upload-artifact@v3
+        with:
+          name: firmware-uf2
+          path: micropython/ports/rp2/build-pico_w/firmware.uf2
