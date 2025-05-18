@@ -38,11 +38,12 @@ jobs:
       - name: Enable USB HID and Bluetooth
         run: |
           cat >> micropython/ports/rp2/mpconfigboard.h << 'EOF'
-#define MICROPY_HW_USB_HID               (1)
-#define MICROPY_PY_BLUETOOTH             (1)
-#define MICROPY_PY_BLUETOOTH_NIMBLE      (1)
-EOF
+          #define MICROPY_HW_USB_HID               (1)
+          #define MICROPY_PY_BLUETOOTH             (1)
+          #define MICROPY_PY_BLUETOOTH_NIMBLE      (1)
+          EOF
         shell: bash
+
 
       - name: Build firmware.uf2
         working-directory: micropython/ports/rp2
