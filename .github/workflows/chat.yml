@@ -1,4 +1,4 @@
-name: bob
+name: chat
 
 on:
   push:
@@ -38,11 +38,13 @@ jobs:
 
           # Insert HID + Bluetooth support immediately after the USB_CDC define
           sed -i '/#define MICROPY_HW_USB_CDC[[:space:]]*(1)/a\
-          // Enable USB HID (keyboard + mouse)\
-          #define MICROPY_HW_USB_HID (1)\
-          \
-          // Enable the Bluetooth API (requires CYW4343x/NimBLE support)\
-          #define MICROPY_PY_BLUETOOTH (1)' mpconfigport.h
+            // Enable USB HID (keyboard + mouse)\
+            #define MICROPY_HW_USB_HID (1)\
+            \
+            // Enable the Bluetooth API (requires CYW4343x/NimBLE support)\
+            #define MICROPY_PY_BLUETOOTH (1)\
+            #define MICROPY_BLUETOOTH_NIMBLE (1)' mpconfigport.h
+
           
       - name: Install dependencies
         run: |
@@ -59,11 +61,11 @@ jobs:
             -DCMAKE_BUILD_TYPE=Release \
             -DPICO_SDK_FETCH_FROM_GIT=ON \
             -DPICO_BOARD=pico_w \
+            -DMICROPY_PY_BLUETOOTH=1 \
+            -DMICROPY_BLUETOOTH_NIMBLE=1 \
             -DCMAKE_C_FLAGS="-Wno-error=stringop-overflow -Wno-error=maybe-uninitialized -mcpu=cortex-m0plus -mthumb" \
             -DCMAKE_CXX_FLAGS="-mcpu=cortex-m0plus -mthumb"
           cmake --build .
-
-
 
       - name: Collect firmware.uf2
         run: |
