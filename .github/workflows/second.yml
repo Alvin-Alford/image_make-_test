@@ -1,46 +1,54 @@
-name: Build MicroPython for Pico W
+name: Build MicroPython for Pico W with HID+Wireless
 
 on:
+  workflow_dispatch:
   push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
+    branches: [main]
+  schedule:
+    - cron: '0 0 * * 0' # Weekly builds
 
 env:
   PICO_SDK_VERSION: 1.5.1
   MICROPYTHON_VERSION: v1.23.0
+  BUILD_ID: ${{ github.run_id }}
 
 jobs:
-  build-firmware:
+  firmware-build:
     runs-on: ubuntu-latest
+    timeout-minutes: 25
+
     steps:
     - name: Checkout Code
       uses: actions/checkout@v4
       with:
         submodules: recursive
+        fetch-depth: 0
 
-    - name: Setup Python
+    - name: Setup Toolchain
       uses: actions/setup-python@v4
       with:
         python-version: '3.10'
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
     - name: Install Dependencies
       run: |
-        sudo apt-get update
-        sudo apt-get install -y \
+        sudo apt-get update && sudo apt-get install -y \
           cmake \
           gcc-arm-none-eabi \
           libnewlib-arm-none-eabi \
           build-essential \
-          libstdc++-arm-none-eabi-newlib
+          libstdc++-arm-none-eabi-newlib \
+          device-tree-compiler
 
-    - name: Configure Environment
+    - name: Patch FATFS Implementation
       run: |
-        # Disable picotool auto-installation
-        sed -i '/PICO_SDK_ENABLE_PICOTOOL/d' micropython/lib/pico-sdk/src/CMakeLists.txt
-        echo "set(PICO_SDK_ENABLE_PICOTOOL 0)" >> micropython/lib/pico-sdk/src/CMakeLists.txt
+        sed -i '1959s/BYTE ns\[8\], c;/BYTE ns[9], c;/' micropython/lib/oofatfs/ff.c
+        sed -i '1988s/ns\[i\] =/ns[i+1] =/' micropython/lib/oofatfs/ff.c
+        sed -i '2513s/\(gen_numname.*\)/\1\n\tns[8] = 0;/' micropython/lib/oofatfs/ff.c
 
-        # Create board configuration
+    - name: Configure Build Environment
+      run: |
         mkdir -p micropython/ports/rp2/boards/RASPBERRY_PI_PICO_W
         cat << EOF > micropython/ports/rp2/boards/RASPBERRY_PI_PICO_W/mpconfigboard.mk
         MICROPY_PY_LWIP = 1
@@ -55,26 +63,31 @@ jobs:
     - name: Build Firmware
       run: |
         cd micropython/ports/rp2
-        cmake -B build -DBOARD=RASPBERRY_PI_PICO_W \
+        cmake -B build \
+          -DBOARD=RASPBERRY_PI_PICO_W \
           -DPICO_SDK_PATH=$PWD/../../../lib/pico-sdk \
-          -DCMAKE_BUILD_TYPE=Release
-        cmake --build build --parallel 4
+          -DCMAKE_BUILD_TYPE=Release \
+          -DCMAKE_C_FLAGS="-Wno-error=stringop-overflow -flto -Os"
+        cmake --build build --parallel $(nproc) --target firmware
 
-    - name: Package Artifacts
+    - name: Generate Checksums
       run: |
-        mkdir -p artifacts
-        cp micropython/ports/rp2/build/firmware.uf2 artifacts/micropython-pico2w-$(date +%Y%m%d).uf2
-        cp micropython/ports/rp2/build/firmware.elf artifacts/micropython-pico2w-$(date +%Y%m%d).elf
+        cd micropython/ports/rp2/build
+        sha256sum firmware.uf2 > firmware.sha256
+        md5sum firmware.uf2 > firmware.md5
 
-    - name: Upload Artifacts
+    - name: Archive Artifacts
       uses: actions/upload-artifact@v3
       with:
-        name: firmware-build
-        path: artifacts/
-        retention-days: 5
+        name: pico2w-firmware-${{ env.BUILD_ID }}
+        path: |
+          micropython/ports/rp2/build/firmware.uf2
+          micropython/ports/rp2/build/firmware.elf
+          micropython/ports/rp2/build/firmware.*sum
+        retention-days: 7
 
-    - name: Cleanup
+    - name: Post-Build Cleanup
       if: ${{ always() }}
       run: |
-        rm -rf artifacts/
-        git clean -ffdx
+        rm -rf micropython/ports/rp2/build/
+        git clean -fdx
