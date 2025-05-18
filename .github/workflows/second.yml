@@ -1,22 +1,30 @@
-name: Build Custom MicroPython UF2
+name: Build MicroPython for Pico W
 
 on:
-  workflow_dispatch:
   push:
-    branches: [ "main" ]
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
 
 env:
   PICO_SDK_VERSION: 1.5.1
-  MICROPYTHON_VERSION: v1.22.2
+  MICROPYTHON_VERSION: v1.23.0
 
 jobs:
   build-firmware:
     runs-on: ubuntu-latest
     steps:
-    - name: Checkout repository
+    - name: Checkout Code
       uses: actions/checkout@v4
+      with:
+        submodules: recursive
 
-    - name: Set up environment
+    - name: Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+
+    - name: Install Dependencies
       run: |
         sudo apt-get update
         sudo apt-get install -y \
@@ -24,63 +32,49 @@ jobs:
           gcc-arm-none-eabi \
           libnewlib-arm-none-eabi \
           build-essential \
-          libstdc++-arm-none-eabi-newlib \
-          git \
-          python3 \
-          python3-pip
+          libstdc++-arm-none-eabi-newlib
 
-    - name: Install Pico SDK
+    - name: Configure Environment
       run: |
-        git clone --branch ${{ env.PICO_SDK_VERSION }} https://github.com/raspberrypi/pico-sdk.git
-        export PICO_SDK_PATH=$PWD/pico-sdk
+        # Disable picotool auto-installation
+        sed -i '/PICO_SDK_ENABLE_PICOTOOL/d' micropython/lib/pico-sdk/src/CMakeLists.txt
+        echo "set(PICO_SDK_ENABLE_PICOTOOL 0)" >> micropython/lib/pico-sdk/src/CMakeLists.txt
 
-    - name: Clone MicroPython
-      run: |
-        git clone --branch ${{ env.MICROPYTHON_VERSION }} https://github.com/micropython/micropython.git
-  
-    # Modified workflow with path fixes
-    - name: Configure HID and Wireless
-      run: |
-        cd micropython/ports/rp2
-        
-        # Create board directory if missing
-        mkdir -p boards/RASPBERRY_PI_PICO_W
-        
-        # Create/update configuration file
-        cat << EOF > boards/RASPBERRY_PI_PICO_W/mpconfigboard.mk
-        # Custom configuration for Pico 2W
+        # Create board configuration
+        mkdir -p micropython/ports/rp2/boards/RASPBERRY_PI_PICO_W
+        cat << EOF > micropython/ports/rp2/boards/RASPBERRY_PI_PICO_W/mpconfigboard.mk
         MICROPY_PY_LWIP = 1
         MICROPY_PY_NETWORK_CYW43 = 1
         MICROPY_PY_BLUETOOTH = 1
         USBD_HID_MOUSE = 1
         USBD_HID_KEYBOARD = 1
         CFLAGS_EXTRA += -DMICROPY_PY_BLUETOOTH_BTSTACK=1
+        MICROPY_PY_WEBREPL = 1
         EOF
-    
-        # Update general configuration
-        echo "CYW43_LWIP=1" >> mpconfigport.mk
 
-    - name: Verify Configuration
+    - name: Build Firmware
       run: |
-        echo "Current directory: $(pwd)"
-        ls -la micropython/ports/rp2/boards/RASPBERRY_PI_PICO_W
-        cat micropython/ports/rp2/boards/RASPBERRY_PI_PICO_W/mpconfigboard.mk
-            
-    - name: Build MicroPython
-      run: |
-        cd micropython
-        make -C mpy-cross
-        cd ports/rp2
-        make BOARD=RASPBERRY_PI_PICO_W clean
-        make BOARD=RASPBERRY_PI_PICO_W
+        cd micropython/ports/rp2
+        cmake -B build -DBOARD=RASPBERRY_PI_PICO_W \
+          -DPICO_SDK_PATH=$PWD/../../../lib/pico-sdk \
+          -DCMAKE_BUILD_TYPE=Release
+        cmake --build build --parallel 4
 
-    - name: Generate UF2
+    - name: Package Artifacts
       run: |
-        cd micropython/ports/rp2/build-PICO_W
-        cp firmware.uf2 ${{ github.workspace }}/micropython-pico2w-hid-ble.uf2
+        mkdir -p artifacts
+        cp micropython/ports/rp2/build/firmware.uf2 artifacts/micropython-pico2w-$(date +%Y%m%d).uf2
+        cp micropython/ports/rp2/build/firmware.elf artifacts/micropython-pico2w-$(date +%Y%m%d).elf
 
-    - name: Upload UF2 artifact
-      uses: actions/upload-artifact@v4
+    - name: Upload Artifacts
+      uses: actions/upload-artifact@v3
       with:
-        name: custom-micropython-uf2
-        path: micropython-pico2w-hid-ble.uf2
+        name: firmware-build
+        path: artifacts/
+        retention-days: 5
+
+    - name: Cleanup
+      if: ${{ always() }}
+      run: |
+        rm -rf artifacts/
+        git clean -ffdx
