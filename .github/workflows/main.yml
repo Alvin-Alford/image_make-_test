@@ -11,7 +11,8 @@ jobs:
   build-uf2:
     runs-on: ubuntu-latest
     steps:
-      # … your earlier steps …
+      - name: Checkout repository
+        uses: actions/checkout@v3
 
       - name: Install dependencies
         run: |
