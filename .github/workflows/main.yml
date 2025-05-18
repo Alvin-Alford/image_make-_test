@@ -52,7 +52,8 @@ jobs:
             -DCMAKE_BUILD_TYPE=Release \
             -DPICO_SDK_FETCH_FROM_GIT=ON \
             -DPICO_BOARD=pico_w \
-            -DCMAKE_C_FLAGS="-Wno-error=stringop-overflow"
+            -DCMAKE_C_FLAGS="-Wno-error=stringop-overflow -mcpu=cortex-m0plus -mthumb" \
+            -DCMAKE_CXX_FLAGS="-mcpu=cortex-m0plus -mthumb"
           cmake --build .
 
       - name: Collect firmware.uf2
