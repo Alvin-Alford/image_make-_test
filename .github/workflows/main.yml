@@ -41,21 +41,18 @@ jobs:
           \
           // Enable the Bluetooth API (requires CYW4343x/NimBLE support)\
           #define MICROPY_PY_BLUETOOTH (1)' mpconfigport.h
-
+          
       - name: Build UF2 (release) with CMake
         working-directory: micropython/ports/rp2
         run: |
-          # 1) Fetch/update all the SDK submodules (picotool, tinyusb, etc.)
           git submodule update --init --recursive
-
-          # 2) Out-of-source CMake configure & build (Release)
           mkdir -p build
           cd build
           cmake .. \
             -DCMAKE_BUILD_TYPE=Release \
             -DPICO_SDK_FETCH_FROM_GIT=ON \
-            -DPICO_BOARD=pico_w
-          # NOTE: no --target here; just build everything
+            -DPICO_BOARD=pico_w \
+            -DCMAKE_C_FLAGS="-Wno-error=stringop-overflow"
           cmake --build .
 
       - name: Collect firmware.uf2
