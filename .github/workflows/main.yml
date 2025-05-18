@@ -72,7 +72,7 @@ jobs:
         #define MICROPY_HW_USB_CDC_NUM (1)
         #define MICROPY_HW_USB_MSC (0)
         #define MICROPY_HW_USB_HID (1)
-        #define MICROPY_HW_FLASH_STORAGE_BYTES (15 * 1024 * 1024)
+        #define MICROPY_HW_FLASH_STORAGE_BYTES (2 * 1024 * 1024)
         EOF
         
         # Create minimal board definition file
