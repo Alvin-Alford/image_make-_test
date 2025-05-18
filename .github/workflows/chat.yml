@@ -20,7 +20,9 @@ jobs:
           sudo apt-get update
           sudo apt-get install --no-install-recommends -y \
             git build-essential cmake ninja-build gcc-arm-none-eabi \
-            libnewlib-arm-none-eabi libusb-1.0-0-dev python3-pip
+            libnewlib-arm-none-eabi libstdc++-arm-none-eabi-newlib \
+            libusb-1.0-0-dev python3-pip
+
 
       - name: Clone upstream MicroPython
         run: |
