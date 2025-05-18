@@ -42,6 +42,11 @@ jobs:
           // Enable the Bluetooth API (requires CYW4343x/NimBLE support)\
           #define MICROPY_PY_BLUETOOTH (1)' mpconfigport.h
           
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake gcc g++ build-essential libnewlib-arm-none-eabi
+      
       - name: Build UF2 (release) with CMake
         working-directory: micropython/ports/rp2
         run: |
@@ -55,6 +60,7 @@ jobs:
             -DCMAKE_C_FLAGS="-Wno-error=stringop-overflow -Wno-error=maybe-uninitialized -mcpu=cortex-m0plus -mthumb" \
             -DCMAKE_CXX_FLAGS="-mcpu=cortex-m0plus -mthumb"
           cmake --build .
+
 
 
       - name: Collect firmware.uf2
