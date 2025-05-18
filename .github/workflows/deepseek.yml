@@ -23,7 +23,12 @@ jobs:
     - name: Setup dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y cmake gcc-arm-none-eabi libnewlib-arm-none-eabi build-essential
+        sudo apt-get install -y cmake gcc-arm-none-eabi g++-arm-none-eabi \
+            libstdc++-arm-none-eabi-newlib libnewlib-arm-none-eabi build-essential
+
+    - name: Set C++ Environment
+      run: |
+        echo "ARM_CXX_FLAGS='-nostdlib -nostartfiles -L$(dirname $(arm-none-eabi-g++ -print-file-name=libstdc++.a))'" >> $GITHUB_ENV
 
     - name: Configure USB HID and Wireless
       run: |
