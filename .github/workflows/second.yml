@@ -50,4 +50,29 @@ jobs:
         mkdir -p build-pico_w
         cd build-pico_w
 
-    - name: Configure
+    - name: Configure build (USB HID + Bluetooth/Wireless)
+      run: |
+        export PICO_BOARD=pico_w
+        export PICO_TOOLCHAIN_PATH=/usr/bin
+        cmake -G Ninja \
+          -DPICO_SDK_PATH=${PICO_SDK_PATH} \
+          -DCMAKE_BUILD_TYPE=Release \
+          -D MICROPY_PY_USB=1 \
+          -D MICROPY_PY_USB_HID=1 \
+          -D MICROPY_BLUETOOTH=1 \
+          ../../ports/rp2
+
+    - name: Build MicroPython
+      run: |
+        ninja -v
+
+    - name: Extract UF2 file
+      run: |
+        cd ../ports/rp2/build-${PICO_BOARD}/firmware
+        cp micropython.uf2 micropython-${PICO_BOARD}-usbhid-bt.uf2
+
+    - name: Upload UF2 artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: micropython-uf2
+        path: micropython-${PICO_BOARD}-usbhid-bt.uf2
